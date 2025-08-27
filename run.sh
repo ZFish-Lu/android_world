@@ -8,5 +8,4 @@
 python run.py \
   --suite_family=android_world \
   --agent_name=beap_agent \
-  --checkpoint_dir=/home/luziyu/android_world/runs/run_20250827T012240757033 \
-
+  --checkpoint_dir=/home/luziyu/android_world/runs/run_20250827T153425966488 \

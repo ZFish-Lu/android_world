@@ -123,5 +123,5 @@ def process_folder(input_folder, result_folder="./result"):
 
 
 if __name__ == "__main__":
-    input_folder = "/home/luziyu/android_world/runs/v1_gpt4o+uitars"  # 替换为实际的输入文件夹路径
+    input_folder = "/home/luziyu/android_world/runs/run_20250827T164434817229"  # 替换为实际的输入文件夹路径
     process_folder(input_folder)

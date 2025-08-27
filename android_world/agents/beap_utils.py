@@ -503,3 +503,49 @@ def extract_value_from_output(output: str, tag: str) -> str:
     pattern = rf"<{tag}>(.*?)</{tag}>"
     match = re.search(pattern, output, re.DOTALL)
     return match.group(1).strip() if match else ""
+
+def parse_semantic_action_to_json_action(text):
+    """
+    解析字符串中的动作指令，支持以下格式：
+    1. open_app(app_name="xxx") -> {"action_type": "open_app", "app_name": "xxx"}
+    2. press_home() -> {"action_type": "navigate_home"}
+    3. press_back() -> {"action_type": "navigate_back"}
+    
+    Args:
+        text (str): 要解析的字符串
+    
+    Returns:
+        dict or None: 解析结果字典，如果没有匹配则返回None
+    """
+    if not isinstance(text, str):
+        return None
+    
+    # 去除字符串前后的空白字符
+    text = text.strip()
+    
+    # 1. 匹配 open_app(app_name="xxx") 格式
+    open_app_pattern = r'open_app\s*\(\s*app_name\s*=\s*["\']([^"\']*)["\']\s*\)'
+    match = re.match(open_app_pattern, text)
+    if match:
+        app_name = match.group(1)
+        return {
+            "action_type": "open_app",
+            "app_name": app_name
+        }
+    
+    # 2. 匹配 press_home() 格式
+    home_pattern = r'press_home\s*\(\s*\)'
+    if re.match(home_pattern, text):
+        return {
+            "action_type": "navigate_home"
+        }
+    
+    # 3. 匹配 press_back() 格式
+    back_pattern = r'press_back\s*\(\s*\)'
+    if re.match(back_pattern, text):
+        return {
+            "action_type": "navigate_back"
+        }
+    
+    # 如果都不匹配，返回None
+    return None

@@ -8,6 +8,7 @@ from android_world.agents.beap_utils import (
     image_preprocessing,
     call_llm,
     parse_action_to_structure_output,
+    parse_semantic_action_to_json_action,
     pil_to_base64,
     parse_structure_output_to_json_action,
 )
@@ -51,7 +52,7 @@ CALL_USER = "call_user"
 
 IMAGE_FACTOR = 28
 MIN_PIXELS = 100 * 28 * 28
-MAX_PIXELS = 16384 * 28 * 28
+MAX_PIXELS = 1920 * 1080
 MAX_RATIO = 200
 
 
@@ -79,7 +80,8 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
         self.max_backtrack_steps = 5
         self.invalid_ways = []
         self.history_images = []  # 存储的是PIL.Image格式，仅在正常状态下记录
-        self.history_grounding_actions = []  # executor的输出
+        self.history_semantic_actions = []
+        self.history_grounding_actions = []
 
     def reset(self, go_home_on_reset: bool = False):
         super().reset(go_home_on_reset)
@@ -93,21 +95,24 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
         self.max_backtrack_steps = 5
         self.invalid_ways = []
         self.history_images = []  # 存储的是PIL.Image格式，仅在正常状态下记录
-        self.history_grounding_actions = []  # executor的输出
+        self.history_semantic_actions = []
+        self.history_grounding_actions = []
 
     def step(self, goal: str) -> base_agent.AgentInteractionResult:
-        step_data = {"semantic_action": None, "action": None, "screenshot": None, "is_backtrack_status": None}
+        step_data = {"action": None, "screenshot": None}
         self.action_step += 1
         logger.info("----------step %s----------", str(self.action_step))
 
         if self.action_step >= 50:
             logger.info("Action step exceeded maximum limit, marking as failed.")
-            step_data["semantic_action"] = "FAIL"
             step_data["action"] = {
-                "action_type": "status",
-                "goal_status": "infeasible",
+                "semantic_action": "FAIL",
+                "grounding_action": {
+                    "action_type": "status",
+                    "goal_status": "infeasible",
+                },
+                "is_backtrack_status": False
             }
-            step_data["is_backtrack_status"] = False
             return base_agent.AgentInteractionResult(
                 True,
                 step_data,
@@ -126,10 +131,14 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
         if self.plan == "":
             # 第一次执行，history初始化
             self.history_images.append(image)
+            self.history_semantic_actions.append(
+                "No operation is performed, only the starting status is recorded"
+            )
             self.history_grounding_actions.append(
                 "No operation is performed, only the starting status is recorded"
             )
             self.plan = self.planner(task=goal, is_replan=False)
+            step_data["plan"] = self.plan
 
         # agent核心逻辑处理
         while True:
@@ -137,6 +146,7 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                 # 需要重新规划，并清理history
                 self.plan = self.planner(task=goal, is_replan=True)
                 self.history_images = self.history_images[:-2]
+                self.history_semantic_actions = self.history_semantic_actions[:-1]
                 self.history_grounding_actions = self.history_grounding_actions[:-1]
                 self.history_images.append(image)
                 self.need_replan = False
@@ -157,7 +167,7 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                     self.max_backtrack_steps = 5
                 else:
                     logger.info(f"Backtracking in progress")
-                    prediction, grounding_actions = self.executor(
+                    prediction, grounding_action = self.executor(
                         task=goal,
                         semantic_action=semantic_action,
                         obs_image_height=obs_image_height,
@@ -165,20 +175,26 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                     )
                     self.max_backtrack_steps -= 1
                     self.history_images = self.history_images[:-1]
-                    step_data["semantic_action"] = semantic_action
-                    step_data["action"] = grounding_actions
+
+                    step_data["action"] = {
+                        "action_step": self.action_step,
+                        "semantic_action": semantic_action,
+                        "grounding_action": grounding_action,
+                        "is_backtrack_status": self.is_backtrack_status
+                    }
+
                     try:
-                        for grounding_action in grounding_actions:
-                            self.env.execute_action(
-                                json_action.JSONAction(**grounding_action)
-                            )
-                            time.sleep(self.wait_after_action_seconds)
+                        self.env.execute_action(
+                            json_action.JSONAction(**grounding_action)
+                        )
+                        time.sleep(self.wait_after_action_seconds)
                     except Exception as e:
                         logging.warning(
                             f"Failed to execute action: {grounding_action}. Error: {e}"
                         )
-                        step_data["action"] = "Error"
-                    step_data["is_backtrack_status"] = True
+                        step_data["action"]["error"] = f"Failed to execute action. Error: {e}"
+
+
                     return base_agent.AgentInteractionResult(
                         False,
                         step_data,
@@ -191,27 +207,31 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                 self.plan = plan
 
                 if exploration_status == "CONTINUE":
-                    prediction, grounding_actions = self.executor(
+                    prediction, grounding_action = self.executor(
                         task=goal,
                         semantic_action=semantic_action,
                         obs_image_height=obs_image_height,
                         obs_image_width=obs_image_width,
                     )
+                    self.history_semantic_actions.append(semantic_action)
                     self.history_grounding_actions.append(prediction)
-                    step_data["semantic_action"] = semantic_action
-                    step_data["action"] = grounding_actions
+                    step_data["action"] = {
+                        "action_step": self.action_step,
+                        "semantic_action": semantic_action,
+                        "grounding_action": grounding_action,
+                        "is_backtrack_status": self.is_backtrack_status
+                    }
                     try:
-                        for grounding_action in grounding_actions:
-                            self.env.execute_action(
-                                json_action.JSONAction(**grounding_action)
-                            )
-                            time.sleep(self.wait_after_action_seconds)
+                        self.env.execute_action(
+                            json_action.JSONAction(**grounding_action)
+                        )
+                        time.sleep(self.wait_after_action_seconds)
                     except Exception as e:
                         logging.warning(
                             f"Failed to execute action: {grounding_action}. Error: {e}"
                         )
-                        step_data["action"] = "Error"
-                    step_data["is_backtrack_status"] = False
+                        step_data["action"]["error"] = f"Failed to execute action. Error: {e}"
+
                     return base_agent.AgentInteractionResult(
                         False,
                         step_data,
@@ -225,24 +245,30 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                     self.max_backtrack_times -= 1
 
                 elif exploration_status == "FAIL":
-                    step_data["semantic_action"] = "FAIL"
                     step_data["action"] = {
-                        "action_type": "status",
-                        "goal_status": "infeasible",
+                        "action_step": self.action_step,
+                        "semantic_action": "FAIL",
+                        "grounding_action": {
+                            "action_type": "status",
+                            "goal_status": "infeasible",
+                        },
+                        "is_backtrack_status": self.is_backtrack_status
                     }
-                    step_data["is_backtrack_status"] = False
                     return base_agent.AgentInteractionResult(
                         True,
                         step_data,
                     )
 
                 elif exploration_status == "DONE":
-                    step_data["semantic_action"] = "DONE"
                     step_data["action"] = {
-                        "action_type": "status",
-                        "goal_status": "complete",
+                        "action_step": self.action_step,
+                        "semantic_action": "DONE",
+                        "grounding_action": {
+                            "action_type": "status",
+                            "goal_status": "complete",
+                        },
+                        "is_backtrack_status": self.is_backtrack_status
                     }
-                    step_data["is_backtrack_status"] = False
                     return base_agent.AgentInteractionResult(
                         True,
                         step_data,
@@ -253,11 +279,15 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                         "action_type": "answer",
                         "text": answer,
                     }
-                    step_data["semantic_action"] = grounding_action
-                    step_data["action"] = grounding_action
+                    step_data["action"] = {
+                        "action_step": self.action_step,
+                        "semantic_action": grounding_action,
+                        "grounding_action": grounding_action,
+                        "is_backtrack_status": self.is_backtrack_status
+                    }
+
                     self.env.execute_action(json_action.JSONAction(**grounding_action))
                     time.sleep(self.wait_after_action_seconds)
-                    step_data["is_backtrack_status"] = False
                     return base_agent.AgentInteractionResult(
                         True,
                         step_data,
@@ -296,6 +326,11 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
         logger.info(f"Executor is called.\n")
         origin_resized_height = self.history_images[-1].height
         origin_resized_width = self.history_images[-1].width
+
+        grounding_action = parse_semantic_action_to_json_action(semantic_action)
+        if grounding_action:
+            logger.info(f"Parsed semantic action to grounding action directly.")
+            return semantic_action, grounding_action
 
         if self.is_backtrack_status:
             prompt = BACKTRACK_EXECUTOR_MOBILE_PROMPT.format(
@@ -369,24 +404,21 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
             origin_resized_width,
         )
 
-        grounding_actions = []
-        for parsed_response in parsed_responses:
-            if "action_type" in parsed_response:
-                if parsed_response["action_type"] == FINISH_WORD:
-                    return prediction, [{"action_type": "wait"}]
+        parsed_response = parsed_responses[0]
+        if "action_type" in parsed_response:
+            if parsed_response["action_type"] == FINISH_WORD:
+                return prediction, {"action_type": "wait"}
+            
+        # 解析动作为android_world可执行的格式
+        grounding_action = parse_structure_output_to_json_action(
+            parsed_response, obs_image_height, obs_image_width
+        )
 
-            # 解析动作为android_world可执行的格式
-            grounding_actions.append(
-                parse_structure_output_to_json_action(
-                    parsed_response, obs_image_height, obs_image_width
-                )
-            )
-
-        return prediction, grounding_actions
+        return prediction, grounding_action
 
     def tracker(self, task):
         logger.info(f"Tracker is called.\n")
-        if self.max_backtrack_times <= 0 or len(self.history_grounding_actions) <= 1:
+        if self.max_backtrack_times <= 0 or len(self.history_semantic_actions) <= 1:
             logger.info(
                 f"Max backtrack times reached or no history available, use TRACKER_PROMPT_NO_BACKTRACK_STATUS."
             )
@@ -405,8 +437,8 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
             {"role": "user", "content": [{"type": "text", "text": prompt}]},
         ]
 
-        start_idx = max(0, len(self.history_grounding_actions) - self.history_n)
-        for history_idx in range(start_idx, len(self.history_grounding_actions)):
+        start_idx = max(0, len(self.history_semantic_actions) - self.history_n)
+        for history_idx in range(start_idx, len(self.history_semantic_actions)):
             encoded_string = pil_to_base64(self.history_images[history_idx])
             messages.append(
                 {
@@ -427,7 +459,7 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                     "content": [
                         {
                             "type": "text",
-                            "text": f"History grounding action: {self.history_grounding_actions[history_idx]}",
+                            "text": f"History action: {self.history_semantic_actions[history_idx]}",
                         }
                     ],
                 }
@@ -473,7 +505,7 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
     def backtrack_tracker(self):
         logger.info(f"Backtrack Tracker is called.\n")
         prompt = BACKTRACK_TRACKER_PROMPT.format(
-            history_actions=self.history_grounding_actions[-1],
+            history_actions=self.history_semantic_actions[-1],
         )
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
         encoded_string_target = pil_to_base64(self.history_images[-2])
@@ -562,7 +594,7 @@ class BEAPAgent(base_agent.EnvironmentInteractingAgent):
                 "content": [
                     {
                         "type": "text",
-                        "text": f"History action: {self.history_grounding_actions[-1]}",
+                        "text": f"History action: {self.history_semantic_actions[-1]}",
                     }
                 ],
             }

@@ -35,9 +35,6 @@ Action: ...
 ## Note
 - Use Chinese in `Thought` part.
 - Write a small plan and finally summarize your next action (with its target element) in one sentence in `Thought` part.
-- Use scroll to slide up and down. drag cannot be used.
-- When multiple words need to be deleted, long press the delete key.
-- **CRITICAL: App Opening Priority**: When opening any app, you MUST use open_app(app_name='app_name') action directly.
 
 ## Task
 {task}
@@ -61,9 +58,6 @@ Action: ...
 ## Note
 - Use Chinese in `Thought` part.
 - Write a small plan and finally summarize your next action (with its target element) in one sentence in `Thought` part.
-- Use scroll to slide up and down. drag cannot be used.
-- When multiple words need to be deleted, long press the delete key.
-- Give priority to using press home() and press back() for backtracking.
 
 ## Semantic Action
 {semantic_action}
@@ -96,17 +90,13 @@ Your plan will guide a limited-capability agent step by step through each meanin
   - Use more steps rather than fewer.
   - If a step involves multiple cognitive actions (e.g., finding information and then answering), split it into multiple steps.
   - Do not skip intermediate steps that would be obvious to a human but non-obvious to a small model.
+- Priority to using open_app to open directly
 
 ## Handling Answer Tasks:
 - If the task requires answering questions based on mobile screen content:
   - Include navigation steps to reach the relevant information
   - Add a final step: "Provide the answer based on the displayed information"
   - The answer step should be marked with "subtask_type": "answer"
-
-## Handling File Operations on Mobile:
-- If the task involves saving files on mobile:
-  - Consider mobile-specific save locations (Downloads, Documents, etc.)
-  - Include steps for file sharing or transfer if needed
 
 ## Cross-app Operations:
 - If the task requires information from one app to be used in another, you MUST:
@@ -210,31 +200,29 @@ Purpose:
 - "ANSWER": When the subtask requires providing an answer based on the current screen content
 - "DONE": When you think the task is completed
 
-## Mobile Action Types:
-- **open_app**: **ALWAYS USE THIS** to open any mobile application directly with open_app(app_name='app_name') format
-- **click**: Tap on buttons, links, icons, or any clickable elements (NOT for opening apps)
-- **long_press**: Long press on elements for context menus or special actions
-- **type**: Enter text in input fields or text areas
-- **scroll**: Scroll up/down/left/right to view more content (NOT for finding apps)
-- **press_home**: Press the home button to go to home screen
-- **press_back**: Press the back button to go to previous screen
+## Mobile Action Types and Format:
+- open_app: open_app(app_name="")
+- click: click(content="Describe the clicked position and component")
+- long_press: long_press(content="Describe the long_press position and component")
+- type: type(content="Describe the text to be entered")
+- scroll: scroll(content="Describe the scroll direction and target component")
+- press_home: press_home()
+- press_back: press_back()
 
 ## Guidelines:
 - Focus on the first task that is still marked "PENDING".
-- **CRITICAL: App Opening Rule**: When any task involves opening an app, you MUST use open_app(app_name='app_name') action. NEVER suggest finding or clicking app icons.
 - Carefully determine whether this task has truly been completed by:
   - Looking for **clear evidence** in mobile screenshots or actions (e.g., changed UI states, success messages, navigation changes).
   - Avoid marking the task as "COMPLETED" based solely on attempted actions — there must be observable confirmation.
   - If no visible outcome or evidence of success is found, leave it as "PENDING".
+- **CRITICAL: App Opening Rule**: When any task involves opening an app, you MUST use open_app(app_name='app_name') action first. 
 - If the subtask requires extracting information or providing an answer based on screen content, use ANSWER status.
 - If the plan deviates too much from the current mobile environment, the content of the plan can be appropriately fine-tuned.
 - Before completing the input and entering the next subtask, close the input keyboard to avoid occlusion.
-- When multiple words need to be deleted, long press the delete key.
-
-## Output Format:
+- When encountering any privacy Settings, try to agree as much as possible to avoid affecting the task.
 - Do NOT include explanations outside these tags.
 
-## Example Output:
+## Output Format:
 <thinking>
 Briefly explain the reasons
 </thinking>
@@ -245,9 +233,7 @@ Briefly explain the reasons
 CONTINUE/BACKTRACK/ANSWER/DONE
 </exploration_status>
 <semantic_action>
-When exploration_status is CONTINUE, giving semantic action guidance executor, not specific coordinates.
-For app opening: open_app(app_name='exact_app_name')
-Other examples: Click the triangle button at the lower right corner
+When exploration_status is CONTINUE, giving semantic action. Strictly follow Mobile Action Types and Format.
 </semantic_action>
 <answer>
 When exploration_status is ANSWER, provide the required answer based on screen content in the specified format
@@ -281,31 +267,29 @@ Purpose:
 - "ANSWER": When the subtask requires providing an answer based on the current screen content
 - "DONE": When you think the task is completed
 
-## Mobile Action Types:
-- **open_app**: **ALWAYS USE THIS** to open any mobile application directly with open_app(app_name='app_name') format
-- **click**: Tap on buttons, links, icons, or any clickable elements (NOT for opening apps)
-- **long_press**: Long press on elements for context menus or special actions
-- **type**: Enter text in input fields or text areas
-- **scroll**: Scroll up/down/left/right to view more content (NOT for finding apps)
-- **press_home**: Press the home button to go to home screen
-- **press_back**: Press the back button to go to previous screen
+## Mobile Action Types and Format:
+- open_app: open_app(app_name="")
+- click: click(content="Describe the clicked position and component")
+- long_press: long_press(content="Describe the long_press position and component")
+- type: type(content="Describe the text to be entered")
+- scroll: scroll(content="Describe the scroll direction and target component")
+- press_home: press_home()
+- press_back: press_back()
 
 ## Guidelines:
 - Focus on the first task that is still marked "PENDING".
-- **CRITICAL: App Opening Rule**: When any task involves opening an app, you MUST use open_app(app_name='app_name') action. NEVER suggest finding or clicking app icons.
 - Carefully determine whether this task has truly been completed by:
   - Looking for **clear evidence** in mobile screenshots or actions (e.g., changed UI states, success messages, navigation changes).
   - Avoid marking the task as "COMPLETED" based solely on attempted actions — there must be observable confirmation.
   - If no visible outcome or evidence of success is found, leave it as "PENDING".
+- **CRITICAL: App Opening Rule**: When any task involves opening an app, you MUST use open_app(app_name='app_name') action first. 
 - If the subtask requires extracting information or providing an answer based on screen content, use ANSWER status.
 - If the plan deviates too much from the current mobile environment, the content of the plan can be appropriately fine-tuned.
 - Before completing the input and entering the next subtask, close the input keyboard to avoid occlusion.
-- When multiple words need to be deleted, long press the delete key.
-
-## Output Format:
+- When encountering any privacy Settings, try to agree as much as possible to avoid affecting the task.
 - Do NOT include explanations outside these tags.
 
-## Example Output:
+## Output Format:
 <thinking>
 Briefly explain the reasons
 </thinking>
@@ -316,9 +300,7 @@ Briefly explain the reasons
 CONTINUE/ANSWER/DONE
 </exploration_status>
 <semantic_action>
-When exploration_status is CONTINUE, giving semantic action guidance executor, not specific coordinates.
-For app opening: open_app(app_name='exact_app_name')
-Other examples: Click the triangle button at the lower right corner
+When exploration_status is CONTINUE, giving semantic action. Strictly follow Mobile Action Types and Format.
 </semantic_action>
 <answer>
 When exploration_status is ANSWER, provide the required answer based on screen content in the specified format
@@ -349,14 +331,14 @@ You are given:
 - Be tolerant of minor visual differences (e.g., time changes in status bar, dynamic content updates) but confirm the overall app state logically matches.
 - Account for mobile-specific navigation patterns and app behaviors.
 
-## Mobile Action Types:
-- **click**: Tap on buttons, links, icons, or any clickable elements
-- **long_press**: Long press on elements for context menus or special actions
-- **type**: Enter text in input fields or text areas
-- **scroll**: Scroll up/down/left/right to view more content
-- **open_app**: Open a specific mobile application
-- **press_home**: Press the home button to go to home screen
-- **press_back**: Press the back button to go to previous screen
+## Mobile Action Types and Format:
+- open_app: open_app(app_name="")
+- click: click(content="Describe the clicked position and component")
+- long_press: long_press(content="Describe the long_press position and component")
+- type: type(content="Describe the text to be entered")
+- scroll: scroll(content="Describe the scroll direction and target component")
+- press_home: press_home()
+- press_back: press_back()
 
 ## If the agent HAS returned to the target state:
 - Set `<is_backtracked>` to `True`
@@ -364,7 +346,7 @@ You are given:
 
 ## If the agent has NOT yet returned:
 - Set `<is_backtracked>` to `False`
-- In `<semantic_action>`, propose the **next mobile backtrack action** with specific mobile action type and location description (e.g., "click the back arrow in the top left corner" or "press_back to return to previous screen").
+- In `<semantic_action>`, giving semantic action to backtrack.
 - In `<thinking>`, explain why the current mobile screenshot is still not at the target state.
 
 ## Output Format:
@@ -375,8 +357,7 @@ Briefly explain the reasons, considering mobile UI elements and app state
 True or False
 </is_backtracked>
 <semantic_action>
-Only if is_backtracked is False — specify mobile action type (click/long_press/type/scroll/press_home/press_back/open_app) and describe the target element or action to be performed
-Example: Click the triangle button at the lower right corner
+When is_backtracked is False, giving semantic action. Strictly follow Mobile Action Types and Format.
 </semantic_action>
 
 ## History actions:
